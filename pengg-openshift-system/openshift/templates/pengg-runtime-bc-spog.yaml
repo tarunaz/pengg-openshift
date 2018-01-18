@@ -13,13 +13,7 @@ metadata:
     template.openshift.io/long-description: |
       PENGG - Runtime application build config for SPOG
     template.openshift.io/provider-display-name: NetApp IT Platform Engineering
-  creationTimestamp: '2017-11-01T19:24:36Z'
   name: pengg-runtime-bc-spog
-  namespace: nss
-  resourceVersion: '10734138'
-  selfLink: >-
-    /apis/template.openshift.io/v1/namespaces/nss/templates/pengg-runtime-bc-spog
-  uid: 4c585f4e-bf3a-11e7-a8fa-005056a1797c
 objects:
   - apiVersion: v1
     kind: ImageStream
