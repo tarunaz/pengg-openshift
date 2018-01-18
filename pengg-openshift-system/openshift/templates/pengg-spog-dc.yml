@@ -1,0 +1,491 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  provider: pengg
+  template: pengg-spog-dc
+message: >-
+  The following service(s) have been created in your project: ${NAME},
+  ${MONGO_SERVICE_NAME}.
+metadata:
+  annotations:
+    description: PENGG - SPOG application with a persistent MongoDB database.
+    iconClass: icon-nodejs
+    openshift.io/display-name: PENGG - SPOG with persistent MongoDB
+    tags: 'quickstart,nodejs,angular'
+  creationTimestamp: '2017-11-21T00:09:12Z'
+  name: pengg-spog-dc
+  namespace: nss-spog
+  resourceVersion: '31207548'
+  selfLink: /apis/template.openshift.io/v1/namespaces/nss-spog/templates/pengg-spog-dc
+  uid: 33d81f8b-ce50-11e7-bedc-005056a32321
+objects:
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: '${NAME}'
+    stringData:
+      db-admin-password: '${DB_ADMIN_PASSWORD}'
+      db-password: '${DB_PASSWORD}'
+      db-user: '${DB_USER}'
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      annotations:
+        description: spog Service
+        service.alpha.openshift.io/dependencies: '[{"name": "${MONGO_SERVICE_NAME}", "kind": "Service"}]'
+      name: '${NAME}'
+    spec:
+      ports:
+        - name: web
+          port: 8080
+          targetPort: 8080
+      selector:
+        name: '${NAME}'
+  - apiVersion: v1
+    kind: DeploymentConfig
+    metadata:
+      annotations:
+        description: 'Spog App ${NAME} dc'
+      name: '${NAME}'
+    spec:
+      replicas: 2
+      selector:
+        name: '${NAME}'
+      strategy:
+        type: Rolling
+      template:
+        metadata:
+          labels:
+            name: '${NAME}'
+            provider: pengg
+            template: pengg-spog
+          name: '${NAME}'
+        spec:
+          containers:
+            - env:
+                - name: DB_NAME
+                  value: '${DB_NAME}'
+              image: ' '
+              livenessProbe:
+                httpGet:
+                  path: /
+                  port: 8080
+                initialDelaySeconds: 30
+                timeoutSeconds: 3
+              name: '${NAME}'
+              ports:
+                - containerPort: 8080
+              readinessProbe:
+                httpGet:
+                  path: /
+                  port: 8080
+                initialDelaySeconds: 3
+                timeoutSeconds: 3
+      triggers:
+        - imageChangeParams:
+            automatic: false
+            containerNames:
+              - '${NAME}'
+            from:
+              kind: ImageStreamTag
+              name: '${APPLICATION_IS_TAG_WEB}'
+              namespace: '${APPLICATION_IS_NM_WEB}'
+          type: ImageChange
+        - type: ConfigChange
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      annotations:
+        description: spog-hapi Service
+        service.alpha.openshift.io/dependencies: '[{"name": "${MONGO_SERVICE_NAME}", "kind": "Service"}]'
+      name: '${NAME}-hapi'
+    spec:
+      ports:
+        - name: api
+          port: 8080
+          targetPort: 8080
+      selector:
+        name: '${NAME}-hapi'
+  - apiVersion: v1
+    kind: DeploymentConfig
+    metadata:
+      annotations:
+        description: 'Spog-hapi App ${NAME} dc'
+      name: '${NAME}-hapi'
+    spec:
+      replicas: 2
+      selector:
+        name: '${NAME}-hapi'
+      strategy:
+        type: Rolling
+      template:
+        metadata:
+          labels:
+            name: '${NAME}-hapi'
+            provider: pengg
+            template: pengg-spog-hapi
+          name: '${NAME}-hapi'
+        spec:
+          containers:
+            - env:
+                - name: MONGO_SERVICE_NAME
+                  value: '${MONGO_SERVICE_NAME}'
+                - name: DB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      key: db-user
+                      name: '${NAME}'
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: db-password
+                      name: '${NAME}'
+                - name: DB_NAME
+                  value: '${DB_NAME}'
+              image: ' '
+              livenessProbe:
+                httpGet:
+                  path: /
+                  port: 8080
+                initialDelaySeconds: 30
+                timeoutSeconds: 3
+              name: '${NAME}-hapi'
+              ports:
+                - containerPort: 8080
+              readinessProbe:
+                httpGet:
+                  path: /
+                  port: 8080
+                initialDelaySeconds: 3
+                timeoutSeconds: 3
+      triggers:
+        - imageChangeParams:
+            automatic: false
+            containerNames:
+              - '${NAME}-hapi'
+            from:
+              kind: ImageStreamTag
+              name: '${APPLICATION_IS_TAG_API}'
+              namespace: '${APPLICATION_IS_NM_API}'
+          type: ImageChange
+        - type: ConfigChange
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      annotations:
+        template.openshift.io/expose-password: '{.data[''database-password'']}'
+      name: '${REDIS_SERVICE_NAME}'
+    stringData:
+      database-password: '${REDIS_PASSWORD}'
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      annotations:
+        template.openshift.io/expose-uri: 'redis://{.spec.clusterIP}:{.spec.ports[?(.name=="redis")].port}'
+      name: '${REDIS_SERVICE_NAME}'
+    spec:
+      ports:
+        - name: redis
+          nodePort: 0
+          port: 6379
+          protocol: TCP
+          targetPort: 6379
+      selector:
+        name: '${REDIS_SERVICE_NAME}'
+      sessionAffinity: None
+      type: ClusterIP
+    status:
+      loadBalancer: {}
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: '${REDIS_SERVICE_NAME}'
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: '${REDIS_VOLUME_CAPACITY}'
+  - apiVersion: v1
+    kind: DeploymentConfig
+    metadata:
+      annotations:
+        template.alpha.openshift.io/wait-for-ready: 'true'
+      name: '${REDIS_SERVICE_NAME}'
+    spec:
+      replicas: 1
+      selector:
+        name: '${REDIS_SERVICE_NAME}'
+      strategy:
+        type: Recreate
+      template:
+        metadata:
+          labels:
+            name: '${REDIS_SERVICE_NAME}'
+        spec:
+          containers:
+            - capabilities: {}
+              env:
+                - name: REDIS_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: database-password
+                      name: '${REDIS_SERVICE_NAME}'
+              image: ' '
+              imagePullPolicy: IfNotPresent
+              livenessProbe:
+                initialDelaySeconds: 30
+                tcpSocket:
+                  port: 6379
+                timeoutSeconds: 1
+              name: redis
+              ports:
+                - containerPort: 6379
+                  protocol: TCP
+              readinessProbe:
+                exec:
+                  command:
+                    - /bin/sh
+                    - '-i'
+                    - '-c'
+                    - >-
+                      test "$(redis-cli -h 127.0.0.1 -a $REDIS_PASSWORD ping)"
+                      == "PONG"
+                initialDelaySeconds: 5
+                timeoutSeconds: 1
+              resources:
+                limits:
+                  memory: '${MEMORY_LIMIT}'
+              securityContext:
+                capabilities: {}
+                privileged: false
+              terminationMessagePath: /dev/termination-log
+              volumeMounts:
+                - mountPath: /var/lib/redis/data
+                  name: '${REDIS_SERVICE_NAME}-data'
+          dnsPolicy: ClusterFirst
+          restartPolicy: Always
+          volumes:
+            - name: '${REDIS_SERVICE_NAME}-data'
+              persistentVolumeClaim:
+                claimName: '${REDIS_SERVICE_NAME}'
+      triggers:
+        - imageChangeParams:
+            automatic: true
+            containerNames:
+              - redis
+            from:
+              kind: ImageStreamTag
+              name: '${REDISDB_IS_TAG}'
+              namespace: '${REDISDB_IS_NM}'
+            lastTriggeredImage: ''
+          type: ImageChange
+        - type: ConfigChange
+    status: {}
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: '${MONGO_SERVICE_NAME}'
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: '${MONGO_VOLUME_CAPACITY}'
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      annotations:
+        template.openshift.io/expose-uri: 'mongodb://{.spec.clusterIP}:{.spec.ports[?(.name=="mongo")].port}'
+      name: '${MONGO_SERVICE_NAME}'
+    spec:
+      ports:
+        - name: mongo
+          nodePort: 0
+          port: 27017
+          protocol: TCP
+          targetPort: 27017
+      selector:
+        name: '${MONGO_SERVICE_NAME}'
+      sessionAffinity: None
+      type: ClusterIP
+    status:
+      loadBalancer: {}
+  - apiVersion: v1
+    kind: DeploymentConfig
+    metadata:
+      creationTimestamp: null
+      name: '${MONGO_SERVICE_NAME}'
+    spec:
+      replicas: 1
+      selector:
+        name: '${MONGO_SERVICE_NAME}'
+      strategy:
+        type: Recreate
+      template:
+        metadata:
+          creationTimestamp: null
+          labels:
+            app: '${NAME}'
+            name: '${MONGO_SERVICE_NAME}'
+            provider: pengg
+            template: pengg-meteor
+        spec:
+          containers:
+            - capabilities: {}
+              env:
+                - name: MONGODB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      key: db-user
+                      name: '${NAME}'
+                - name: MONGODB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: db-password
+                      name: '${NAME}'
+                - name: MONGODB_ADMIN_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: db-admin-password
+                      name: '${NAME}'
+                - name: MONGODB_DATABASE
+                  value: '${DB_NAME}'
+              image: ' '
+              imagePullPolicy: IfNotPresent
+              livenessProbe:
+                initialDelaySeconds: 30
+                tcpSocket:
+                  port: 27017
+                timeoutSeconds: 1
+              name: '${MONGO_SERVICE_NAME}'
+              ports:
+                - containerPort: 27017
+                  protocol: TCP
+              readinessProbe:
+                exec:
+                  command:
+                    - /bin/sh
+                    - '-i'
+                    - '-c'
+                    - >-
+                      mongo 127.0.0.1:27017/$MONGODB_DATABASE -u $MONGODB_USER
+                      -p $MONGODB_PASSWORD --eval="quit()"
+                initialDelaySeconds: 3
+                timeoutSeconds: 1
+              securityContext:
+                capabilities: {}
+                privileged: false
+              terminationMessagePath: /dev/termination-log
+              volumeMounts:
+                - mountPath: /var/lib/mongodb/data
+                  name: '${MONGO_SERVICE_NAME}-data'
+          dnsPolicy: ClusterFirst
+          restartPolicy: Always
+          volumes:
+            - name: '${MONGO_SERVICE_NAME}-data'
+              persistentVolumeClaim:
+                claimName: '${MONGO_SERVICE_NAME}'
+      triggers:
+        - imageChangeParams:
+            automatic: false
+            containerNames:
+              - '${MONGO_SERVICE_NAME}'
+            from:
+              kind: ImageStreamTag
+              name: '${MONGODB_IS_TAG}'
+              namespace: '${MONGODB_IS_NM}'
+            lastTriggeredImage: ''
+          type: ImageChange
+        - type: ConfigChange
+    status: {}
+parameters:
+  - description: Name of the application.
+    displayName: Application Name.
+    name: NAME
+    required: true
+  - description: Application runtime image stream tag for SPOG WEB.
+    displayName: Application imagetag
+    name: APPLICATION_IS_TAG_WEB
+    required: true
+  - description: Application runtime image stream namespace for SPOG WEB.
+    displayName: Application image namespace
+    name: APPLICATION_IS_NM_WEB
+  - description: Application runtime image stream tag for SPOG API.
+    displayName: Application imagetag
+    name: APPLICATION_IS_TAG_API
+    required: true
+  - description: Application runtime image stream namespace for SPOG API.
+    displayName: Application image namespace
+    name: APPLICATION_IS_NM_API
+  - description: Mongo DB image stream tag.
+    displayName: MongoDB image tag
+    name: MONGODB_IS_TAG
+    required: true
+    value: 'mongodb-32-rhel7:3.2'
+  - description: Mongo DB image stream namespace.
+    displayName: MongoDB image namespace
+    name: MONGODB_IS_NM
+    required: true
+    value: pengg-rhel
+  - description: Redis DB image stream tag.
+    displayName: Redis image tag
+    name: REDISDB_IS_TAG
+    required: true
+    value: 'redis-32-rhel7:3.2'
+  - description: REDIS DB image stream namespace.
+    displayName: REDIS image namespace
+    name: REDISDB_IS_NM
+    required: true
+    value: pengg-rhel
+  - description: 'Volume space available for mongodb data, e.g. 512Mi, 2Gi'
+    displayName: Volume Capacity
+    name: MONGO_VOLUME_CAPACITY
+    required: true
+    value: 10Gi
+  - displayName: MongoDB Service Name
+    name: MONGO_SERVICE_NAME
+    required: true
+    value: mongodb
+  - description: Name of MongoDB database to initialize
+    displayName: MongoDB Database Name
+    name: DB_NAME
+    required: true
+    value: meteor
+  - description: Username for MongoDB user that will be used for accessing the database.
+    displayName: MongoDB Username
+    from: 'user[A-Z0-9]{5}'
+    generate: expression
+    name: DB_USER
+  - description: Password for the MongoDB user.
+    displayName: MongoDB Password
+    from: '[a-zA-Z0-9]{16}'
+    generate: expression
+    name: DB_PASSWORD
+  - description: Password for the MongoDB admin user.
+    displayName: MongoDB Administrator Password
+    from: '[a-zA-Z0-9]{16}'
+    generate: expression
+    name: DB_ADMIN_PASSWORD
+  - description: Maximum amount of memory the container can use.
+    displayName: Memory Limit
+    name: MEMORY_LIMIT
+    required: true
+    value: 512Mi
+  - description: The name of the OpenShift Service exposed for the database.
+    displayName: Database Service Name
+    name: REDIS_SERVICE_NAME
+    required: true
+    value: redis
+  - description: Password for the Redis connection user.
+    displayName: Redis Connection Password
+    from: '[a-zA-Z0-9]{16}'
+    generate: expression
+    name: REDIS_PASSWORD
+    required: true
+  - description: 'Volume space available for data, e.g. 512Mi, 2Gi.'
+    displayName: Volume Capacity
+    name: REDIS_VOLUME_CAPACITY
+    required: true
+    value: 10Gi
+

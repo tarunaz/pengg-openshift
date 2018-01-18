@@ -1,0 +1,226 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  provider: pengg
+  template: pengg-runtime-bc-spog
+message: 'The following service(s) have been created in your project: ${BASE}'
+metadata:
+  annotations:
+    description: PENGG - Runtime application build config for SPOG
+    iconClass: icon-runtime
+    openshift.io/display-name: PENGG - Runtime application SPOG build config
+    tags: 'builder,runtime'
+    template.openshift.io/long-description: |
+      PENGG - Runtime application build config for SPOG
+    template.openshift.io/provider-display-name: NetApp IT Platform Engineering
+  creationTimestamp: '2017-11-01T19:24:36Z'
+  name: pengg-runtime-bc-spog
+  namespace: nss
+  resourceVersion: '10734138'
+  selfLink: >-
+    /apis/template.openshift.io/v1/namespaces/nss/templates/pengg-runtime-bc-spog
+  uid: 4c585f4e-bf3a-11e7-a8fa-005056a1797c
+objects:
+  - apiVersion: v1
+    kind: ImageStream
+    metadata:
+      annotations:
+        description: Keeps track of changes in the application image
+      name: '${BASE}'
+  - apiVersion: v1
+    kind: BuildConfig
+    metadata:
+      annotations:
+        description: Defines how to build the application
+      name: '${BASE}-${SOURCE_REPOSITORY_REF}'
+    spec:
+      output:
+        to:
+          kind: ImageStreamTag
+          name: '${BASE}:${SOURCE_REPOSITORY_REF}'
+      source:
+        contextDir: '${CONTEXT_DIR}'
+        git:
+          ref: '${SOURCE_REPOSITORY_REF}'
+          uri: '${SOURCE_REPOSITORY_URL}'
+        secrets:
+          - secret:
+              name: '${GIT_PULL_SECRET}'
+        sourceSecret:
+          name: '${GIT_PULL_SECRET}'
+        type: Git
+      strategy:
+        sourceStrategy:
+          env:
+            - name: ANGULAR_HOME_DIR
+              value: '${ANGULAR_HOME_DIR}'
+          from:
+            kind: ImageStreamTag
+            name: '${BC_IMAGETAG}'
+            namespace: '${BC_IMAGETAG_NS}'
+        type: Source
+  - apiVersion: v1
+    kind: BuildConfig
+    metadata:
+      labels:
+        build: '${BASE}'
+      name: '${BASE}-${SOURCE_REPOSITORY_REF}-pipeline'
+    spec:
+      runPolicy: Serial
+      source:
+        contextDir: '${CONTEXT_DIR}'
+        git:
+          ref: '${SOURCE_REPOSITORY_REF}'
+          uri: '${SOURCE_REPOSITORY_URL}'
+        type: Git
+      strategy:
+        jenkinsPipelineStrategy:
+          jenkinsfile: |
+            node ('nodejs') {
+                env.SKIP_TLS='true'
+                env.authToken = "${authToken}"
+                def route = ''
+                def routeforNotification = ''
+                echo "openshiftbuild  Connect & Trigger openshift Buid in registry cluster..."
+                stage('build ${BASE}') {
+                    openshiftBuild bldCfg: '${BASE}-${SOURCE_REPOSITORY_REF}', showBuildLogs: 'true', waitTime: '5', waitUnit: 'min'
+                }
+              echo "openshifttag Tag image with custom version number..."
+                stage('tag image'){
+                         echo "Check out source code..."
+                         git branch: "${SOURCE_REPOSITORY_REF}", credentialsId: 'spog', url: "${SOURCE_REPOSITORY_URL}"
+                       echo "readFile ${Version_File_Loc} "
+                       def VERSION = readFile '${Version_File_Loc}'
+                       echo "$VERSION"
+                    openshiftTag alias: 'false', destStream: '${BASE}', destTag: "$VERSION,tst", destinationNamespace: '', srcStream: '${BASE}', srcTag: '${SOURCE_REPOSITORY_REF}', verbose: 'false'
+                 }
+             echo "openshift import image at TPAAS..."
+                stage('import image to TPAAS'){
+                  sh "oc login --token ${authToken} https://tpaas-console.netapp.com:8443 --insecure-skip-tls-verify=true"
+                  sh "oc project ${DEST_DEPLOY_NAMESPACE} "
+                  sh "oc import-image '${BASE}' --from=registry.netapp.com/nss/${BASE} --confirm --all"
+                }
+                
+              echo "openshift deployement to TPAAS .."
+                stage('deploy to TPAAS'){
+                    openshiftDeploy apiURL: 'https://tpaas-console.netapp.com:8443', authToken: '$authToken', depCfg: '${BASE}-${SOURCE_REPOSITORY_REF}', namespace: '${DEST_DEPLOY_NAMESPACE}', verbose: 'true', waitTime: '', waitUnit: 'sec'
+                    echo "Verifying the deployment in TPASS..."
+                    openshiftVerifyDeployment apiURL: 'https://tpaas-console.netapp.com:8443', authToken: '$authToken', depCfg: '${BASE}-${SOURCE_REPOSITORY_REF}', namespace: '${DEST_DEPLOY_NAMESPACE}', replicaCount: '2', verbose: 'true', verifyReplicaCount: 'true', waitTime: '900', waitUnit: 'sec'
+                }
+               echo " openshift Verify Service at TPAAS..."
+               stage ('verify service to TPAAS'){
+               sh 'oc get route | awk \'$3=="spog" {print $2}\' >routelist'
+                 route=readFile('routelist').trim()
+                 echo "$route"
+                   def curlHttpsFlag =''
+                   def curlhttpsOutput=''
+                  def curlHttpFlag =''
+                  def curlhttpOutput=''
+                  if(route.length()>0){
+                      String[] routeData = route.split('\n')
+                       for ( int i = 0; i < routeData.length; i++ ) {
+                            def routeName = routeData[i]
+                          curlHttpsFlag = sh (script:"curl -s -I -k https://$routeName | grep HTTP | awk {\'print \$2\'} > curlhttpsOutput" , returnStatus: true) == 0
+                         if(curlHttpsFlag==true){
+                             curlhttpsOutput = readFile('curlhttpsOutput').trim()
+                           }             
+                         if (curlHttpsFlag==false || !(curlhttpsOutput.contains("200") || curlhttpsOutput.contains("302"))){
+                             curlHttpFlag = sh (script:"curl -s -I -k http://$routeName | grep HTTP | awk {\'print \$2\'} > curlhttpOutput" , returnStatus: true) == 0
+                           }
+                        if (curlHttpFlag==true){
+                          curlhttpOutput = readFile('curlhttpOutput').trim()
+                           }
+                        if (curlhttpsOutput.contains("200") || curlhttpsOutput.contains("302")){
+                          routeforNotification = routeforNotification + "https://$routeName \n"
+                           }
+                       else if(curlhttpOutput.contains("200") || curlhttpOutput.contains("302")){
+                             routeforNotification = routeforNotification + "http://$routeName \n"
+                             }
+                       if (!(curlhttpsOutput.contains("200") || curlhttpsOutput.contains("302")) && !(curlhttpOutput.contains("200") || curlhttpOutput.contains("302"))){
+                              error("Build failed: $routeName is not listening...")
+                              }
+                                 curlHttpsFlag =''
+                                 curlhttpsOutput=''
+                                 curlHttpFlag =''
+                                 curlhttpOutput=''
+                          } // for
+                      } // if
+                }
+                  echo "Sending notification"
+                   stage ('Send Notification'){
+                     mail (to: 'suchak@netapp.com',cc: 'suchak@netapp.com',from: "openshift-TPAAS@netapp.com",subject: "SPOG-angular deployment status upate",mimeType: "text/plain",
+                     body: "Hi Team,\n\nThe SPOG-Angular deployment has been completed successfully.\n\nPlease validate the below link: \n $routeforNotification\n\nThanks\nOpenshift Team");
+              }
+            }
+        type: JenkinsPipeline
+      triggers:
+        - imageChange:
+            from:
+              kind: ImageStreamTag
+              name: '${BC_IMAGETAG}'
+              namespace: '${BC_IMAGETAG_NS}'
+          type: ImageChange
+        - type: ConfigChange
+        - generic:
+            secret: '${GIT_WEBHOOK_SECRET}'
+          type: Generic
+parameters:
+  - description: The name assigned to all of the frontend objects defined in this template.
+    displayName: Name
+    name: BASE
+    required: true
+  - description: The URL of the repository with your application source code.
+    displayName: Git Repository URL
+    name: SOURCE_REPOSITORY_URL
+    required: true
+  - description: >-
+      Set this to a branch name, tag or other ref of your repository if you are
+      not using the default branch.
+    displayName: Git Reference
+    name: SOURCE_REPOSITORY_REF
+    required: true
+    value: master
+  - description: Set git clone secrete
+    displayName: git secrete
+    name: GIT_PULL_SECRET
+    required: true
+    value: caseboard
+  - description: >-
+      Set this to the relative path to your project if it is not in the root of
+      your repository.
+    displayName: Context Directory
+    name: CONTEXT_DIR
+  - description: Set Version File location
+    displayName: Version file location from gitlab SRC
+    name: Version_File_Loc
+    required: true
+  - description: Set angular source Root
+    displayName: ANGULAR_HOME_DIR
+    name: ANGULAR_HOME_DIR
+  - description: Set image tag of meteor build image
+    displayName: Builder ImageTag
+    name: BC_IMAGETAG
+    required: true
+    value: 'pengg-s2i-meteor:1.5'
+  - description: Set namespace of meteor build image
+    displayName: Builder Image Namespace
+    name: BC_IMAGETAG_NS
+    required: true
+    value: pengg
+  - description: A secret string used to configure the Generic webhook.
+    displayName: Generic Webhook Secret
+    from: '[a-zA-Z0-9]{10}'
+    generate: expression
+    name: GIT_WEBHOOK_SECRET
+  - description: jenkinsa authToken - TPAAS
+    displayName: authToken - TPAAS
+    name: authToken
+  - description: Destination Namespace - TPAAS
+    displayName: destNameSpace - TPAAS
+    name: DEST_DEPLOY_NAMESPACE
+    required: true
+  - description: Provide Email address to receive notification
+    displayName: set your dl
+    name: email_Address
+    required: true
+
