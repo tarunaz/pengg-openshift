@@ -48,7 +48,7 @@ objects:
         description: 'Spog App ${NAME} dc'
       name: '${NAME}'
     spec:
-      replicas: 2
+      replicas: 1
       selector:
         name: '${NAME}'
       strategy:
