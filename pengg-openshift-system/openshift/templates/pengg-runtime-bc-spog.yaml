@@ -195,7 +195,7 @@ parameters:
     displayName: Builder ImageTag
     name: BC_IMAGETAG
     required: true
-    value: 'pengg-s2i-meteor:1.5'
+    value: 'pengg-s2i-node-angular:latest'
   - description: Set namespace of meteor build image
     displayName: Builder Image Namespace
     name: BC_IMAGETAG_NS
