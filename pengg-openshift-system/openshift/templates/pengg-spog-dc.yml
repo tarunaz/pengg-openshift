@@ -113,7 +113,7 @@ objects:
         description: 'Spog-hapi App ${NAME} dc'
       name: '${NAME}-hapi'
     spec:
-      replicas: 2
+      replicas: 1
       selector:
         name: '${NAME}-hapi'
       strategy:
