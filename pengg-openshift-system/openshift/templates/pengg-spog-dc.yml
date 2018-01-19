@@ -253,9 +253,6 @@ objects:
                       == "PONG"
                 initialDelaySeconds: 5
                 timeoutSeconds: 1
-              resources:
-                limits:
-                  memory: '${MEMORY_LIMIT}'
               securityContext:
                 capabilities: {}
                 privileged: false
