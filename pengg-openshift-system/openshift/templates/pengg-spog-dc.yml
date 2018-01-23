@@ -14,7 +14,6 @@ metadata:
     tags: 'quickstart,nodejs,angular'
   creationTimestamp: '2017-11-21T00:09:12Z'
   name: pengg-spog-dc
-  namespace: nss-spog
   resourceVersion: '31207548'
   selfLink: /apis/template.openshift.io/v1/namespaces/nss-spog/templates/pengg-spog-dc
   uid: 33d81f8b-ce50-11e7-bedc-005056a32321
