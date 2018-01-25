@@ -91,7 +91,7 @@ objects:
             - name: OCP_BUILD_TEMPLATES_LOC
               value: pengg-openshift/pengg-openshift-system/openshift/templates/pengg-runtime-bc-spog.yaml
             - name: OCP_DEPLOY_TEMPLATES_LOC
-              value: pengg-openshift/pengg-openshift-system/openshift/templates/pengg-spog-dc.yml"
+              value: pengg-openshift/pengg-openshift-system/openshift/templates/pengg-spog-dc.yml
           jenkinsfilePath: spogDev1Pipeline.groovy
       type: JenkinsPipeline
       triggers:
