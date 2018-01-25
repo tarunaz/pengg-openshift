@@ -2,18 +2,18 @@ apiVersion: template.openshift.io/v1
 kind: Template
 labels:
   provider: pengg
-  template: pengg-runtime-bc-spog
+  template: tarun-pengg-runtime-bc-spog
 message: 'The following service(s) have been created in your project: ${BASE}'
 metadata:
   annotations:
     description: PENGG - Runtime application build config for SPOG
     iconClass: icon-runtime
-    openshift.io/display-name: PENGG - Runtime application SPOG build config
+    openshift.io/display-name: TARUN PENGG - Runtime application SPOG build config
     tags: 'builder,runtime'
     template.openshift.io/long-description: |
       PENGG - Runtime application build config for SPOG
     template.openshift.io/provider-display-name: NetApp IT Platform Engineering
-  name: pengg-runtime-bc-spog
+  name: tarun-pengg-runtime-bc-spog
 objects:
   - apiVersion: v1
     kind: ImageStream
@@ -50,8 +50,8 @@ objects:
               value: '${ANGULAR_HOME_DIR}'
           from:
             kind: ImageStreamTag
-            name: '${BC_IMAGETAG}'
-            namespace: '${BC_IMAGETAG_NS}'
+            name: '${BUILDER_IMAGE_TAG}'
+            namespace: '${BUILDER_IMAGE_NAMESPACE}'
         type: Source
   - apiVersion: v1
     kind: BuildConfig
@@ -71,14 +71,35 @@ objects:
         type: Git
       strategy:
         jenkinsPipelineStrategy:
+          env:
+            - name: BASE
+              value: ${BASE}
+            - name: SOURCE_REPOSITORY_URL
+              value: ${SOURCE_REPOSITORY_URL}
+            - name: SOURCE_REPOSITORY_REF
+              value: ${SOURCE_REPOSITORY_REF}
+            - name: GIT_PULL_SECRET
+              value: tarun-spog-master
+            - name: BUILD_NAMESPACE
+              value: nss
+            - name: DEPLOY_NAMESPACE
+              value: tarun-spog1
+            - name: OCP_TEMPLATES_SRC_REPOSITORY_URL
+              value: git@github.com:tarunaz/pengg-openshift.git
+            - name: OCP_DEPLOY_URL
+              value: https://tpaas-console.netapp.com:8443
+            - name: OCP_BUILD_TEMPLATES_LOC
+              value: pengg-openshift/pengg-openshift-system/openshift/templates/pengg-runtime-bc-spog.yaml
+            - name: OCP_DEPLOY_TEMPLATES_LOC
+              value: pengg-openshift/pengg-openshift-system/openshift/templates/pengg-spog-dc.yml"
           jenkinsfilePath: spogDev1Pipeline.groovy
       type: JenkinsPipeline
       triggers:
         - imageChange:
             from:
               kind: ImageStreamTag
-              name: '${BC_IMAGETAG}'
-              namespace: '${BC_IMAGETAG_NS}'
+              name: '${BUILDER_IMAGE_TAG}'
+              namespace: '${BUILDER_IMAGE_NAMESPACE}'
           type: ImageChange
         - type: ConfigChange
         - generic:
@@ -100,11 +121,6 @@ parameters:
     name: SOURCE_REPOSITORY_REF
     required: true
     value: master
-  - description: Set git clone secrete
-    displayName: git secrete
-    name: GIT_PULL_SECRET
-    required: true
-    value: caseboard
   - description: >-
       Set this to the relative path to your project if it is not in the root of
       your repository.
@@ -119,12 +135,12 @@ parameters:
     name: ANGULAR_HOME_DIR
   - description: Set image tag of meteor build image
     displayName: Builder ImageTag
-    name: BC_IMAGETAG
+    name: BUILDER_IMAGE_TAG
     required: true
     value: 'pengg-s2i-node-angular:latest'
   - description: Set namespace of meteor build image
     displayName: Builder Image Namespace
-    name: BC_IMAGETAG_NS
+    name: BUILDER_IMAGE_NAMESPACE
     required: true
     value: pengg
   - description: A secret string used to configure the Generic webhook.
@@ -132,15 +148,3 @@ parameters:
     from: '[a-zA-Z0-9]{10}'
     generate: expression
     name: GIT_WEBHOOK_SECRET
-  - description: jenkinsa authToken - TPAAS
-    displayName: authToken - TPAAS
-    name: authToken
-  - description: Destination Namespace - TPAAS
-    displayName: destNameSpace - TPAAS
-    name: DEST_DEPLOY_NAMESPACE
-    required: true
-  - description: Provide Email address to receive notification
-    displayName: set your dl
-    name: email_Address
-    required: true
-
