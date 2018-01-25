@@ -67,7 +67,7 @@ objects:
           ref: ${SOURCE_REPOSITORY_REF}
           uri: ${SOURCE_REPOSITORY_URL}
         sourceSecret:
-          name: tarun-spog-master
+          name: ${GIT_PULL_SECRET}
         type: Git
       strategy:
         jenkinsPipelineStrategy:
@@ -79,7 +79,7 @@ objects:
             - name: SOURCE_REPOSITORY_REF
               value: ${SOURCE_REPOSITORY_REF}
             - name: GIT_PULL_SECRET
-              value: tarun-spog-master
+              value: ${GIT_PULL_SECRET}
             - name: BUILD_NAMESPACE
               value: nss
             - name: DEPLOY_NAMESPACE
@@ -148,3 +148,7 @@ parameters:
     from: '[a-zA-Z0-9]{10}'
     generate: expression
     name: GIT_WEBHOOK_SECRET
+  - description: A secret to pull code from Git
+    displayName: Git Pull Secret
+    name: GIT_PULL_SECRET
+    value: tarun-spog-master
