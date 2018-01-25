@@ -64,8 +64,8 @@ objects:
       source:
         contextDir: jenkins
         git:
-          ref: master
-          uri: 'git@github.com:tarunaz/spog-ui.git'
+          ref: ${SOURCE_REPOSITORY_REF}
+          uri: ${SOURCE_REPOSITORY_URL}
         sourceSecret:
           name: tarun-spog-master
         type: Git
